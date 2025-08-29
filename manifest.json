@@ -1,0 +1,41 @@
+{
+  "manifest_version": 3,
+  "name": "Leaked Email Checker (Bitlion Proxy)",
+  "version": "1.0.0",
+  "description": "Checks whether an email has been leaked using Bitlion's HIBP proxy.",
+  "permissions": [
+    "storage",
+    "contextMenus",
+    "scripting",
+    "activeTab",
+    "notifications"
+  ],
+  "host_permissions": [
+    "https://email-check.bitlion.io/*"
+  ],
+  "background": {
+    "service_worker": "background.js"
+  },
+  "action": {
+    "default_title": "Scan page for emails",
+    "default_popup": "popup.html"
+  },
+  "icons": {
+    "16": "icons/icon16.png",
+    "48": "icons/icon48.png",
+    "128": "icons/icon128.png"
+  },
+  "content_scripts": [
+    {
+      "matches": ["<all_urls>"],
+      "js": ["content_script.js"],
+      "run_at": "document_idle"
+    }
+  ],
+  "web_accessible_resources": [
+    {
+      "resources": ["highlight.css"],
+      "matches": ["<all_urls>"]
+    }
+  ]
+}

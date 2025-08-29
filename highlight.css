@@ -1,0 +1,2 @@
+.le-ch-highlight { background: rgba(255, 230, 0, 0.4); padding: 2px 4px; border-radius: 3px; }
+.le-ch-highlight.leaked { box-shadow: 0 0 0 2px rgba(255, 80, 80, 0.12) inset; }

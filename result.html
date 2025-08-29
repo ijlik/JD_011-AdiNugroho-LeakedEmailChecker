@@ -1,0 +1,56 @@
+<!doctype html>
+<html>
+<head>
+  <meta charset="utf-8" />
+  <title>Leaked Email — Details</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <link rel="stylesheet" href="styles.css" />
+</head>
+<body>
+  <div class="container">
+    <h2 id="emailTitle"></h2>
+    <div id="detailArea">Loading...</div>
+  </div>
+  <script>
+    async function fetchDetails(email) {
+      const res = await new Promise(resolve => {
+        chrome.runtime.sendMessage({ type: "check-email", email }, r => resolve(r));
+      });
+      return res;
+    }
+    (async () => {
+      const params = new URLSearchParams(location.search);
+      const email = params.get("email");
+      document.getElementById("emailTitle").textContent = email;
+      const r = await fetchDetails(email);
+      const area = document.getElementById("detailArea");
+      if (!r) return area.textContent = "No response.";
+      if (r.error) return area.textContent = "Error: " + r.message;
+      const data = r.data;
+      if (!data || !data.leaked) {
+        area.innerHTML = "<p>No known breaches for this email.</p>";
+        return;
+      }
+      const breaches = data.breaches || [];
+      area.innerHTML = `<p>Found ${breaches.length} breach(es).</p>`;
+      const ul = document.createElement("ul");
+      breaches.forEach(b => {
+        const li = document.createElement("li");
+        li.innerHTML = `<strong>${b.name}</strong> (${b.date || "unknown date"}) — Exposed: ${b.exposed_data?.join(", ") || "details"}`;
+        ul.appendChild(li);
+      });
+      area.appendChild(ul);
+      // actionable advice
+      const advice = document.createElement("div");
+      advice.innerHTML = `<h3>Recommended actions</h3>
+        <ol>
+          <li>Change your password on affected services and any reuse across sites.</li>
+          <li>Enable 2-factor authentication (2FA) where possible.</li>
+          <li>Use a password manager to create unique passwords.</li>
+          <li>Monitor accounts for suspicious activity.</li>
+        </ol>`;
+      area.appendChild(advice);
+    })();
+  </script>
+</body>
+</html>
