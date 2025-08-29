@@ -27,16 +27,27 @@
       if (!r) return area.textContent = "No response.";
       if (r.error) return area.textContent = "Error: " + r.message;
       const data = r.data;
-      if (!data || !data.leaked) {
+      if (!data || !data.success || data.breaches_found === 0) {
         area.innerHTML = "<p>No known breaches for this email.</p>";
         return;
       }
-      const breaches = data.breaches || [];
-      area.innerHTML = `<p>Found ${breaches.length} breach(es).</p>`;
+      const breaches = data.data || [];
+      area.innerHTML = `<p>Found ${data.breaches_found} breach(es).</p>`;
       const ul = document.createElement("ul");
       breaches.forEach(b => {
         const li = document.createElement("li");
-        li.innerHTML = `<strong>${b.name}</strong> (${b.date || "unknown date"}) — Exposed: ${b.exposed_data?.join(", ") || "details"}`;
+        const breachDate = new Date(b.breach_date).toLocaleDateString();
+        const description = b.description ? b.description.substring(0, 200) + "..." : "No description available";
+        li.innerHTML = `
+          <div style="margin-bottom: 10px; padding: 10px; border: 1px solid #ddd; border-radius: 6px;">
+            <strong>${b.title || b.name}</strong> 
+            <span style="color: #666;">(${breachDate})</span>
+            <br><small style="color: #888;">${b.domain}</small>
+            <br><strong>Exposed data:</strong> ${b.data_classes?.join(", ") || "Unknown"}
+            <br><strong>Affected accounts:</strong> ${b.pwn_count?.toLocaleString() || "Unknown"}
+            <br><small>${description}</small>
+          </div>
+        `;
         ul.appendChild(li);
       });
       area.appendChild(ul);

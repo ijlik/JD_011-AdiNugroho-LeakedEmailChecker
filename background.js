@@ -78,7 +78,7 @@ chrome.contextMenus.onClicked.addListener(async (info, tab) => {
       type: "basic",
       iconUrl: "icons/icon48.png",
       title: `Check result for ${email}`,
-      message: result.error ? result.message : (JSON.stringify(result.data).slice(0, 200))
+      message: result.error ? result.message : (result.data.success ? `${result.data.breaches_found} breach(es) found` : "No breaches found")
     });
   }
 });
