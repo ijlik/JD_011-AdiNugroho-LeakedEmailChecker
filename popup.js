@@ -46,7 +46,7 @@ scanBtn.addEventListener("click", async () => {
       emails.forEach(e => {
         const r = results[e];
         const li = document.createElement("li");
-        li.innerHTML = `<strong>${e}</strong> — ${r && r.leaked ? `⚠️ ${r.breaches?.length || 1} breach(es)` : "✅ No known leaks" } <button data-email="${e}" class="detailsBtn">Details</button>`;
+        li.innerHTML = `<strong>${e}</strong> — ${r && r.success && r.breaches_found > 0 ? `⚠️ ${r.breaches_found} breach(es)` : "✅ No known leaks" } <button data-email="${e}" class="detailsBtn">Details</button>`;
         resultsList.appendChild(li);
       });
       status.textContent = "Done. Click Details for more info.";
@@ -55,7 +55,7 @@ scanBtn.addEventListener("click", async () => {
         b.addEventListener("click", (ev) => {
           const email = ev.target.dataset.email;
           // open details page (extension page)
-          chrome.tabs.create({ url: chrome.runtime.getURL(`results.html?email=${encodeURIComponent(email)}`) });
+          chrome.tabs.create({ url: chrome.runtime.getURL(`result.html?email=${encodeURIComponent(email)}`) });
         });
       });
     });

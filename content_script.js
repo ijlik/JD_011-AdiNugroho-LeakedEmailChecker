@@ -58,10 +58,10 @@ document.addEventListener("input", (ev) => {
           return;
         }
         const data = res.data;
-        if (data && data.leaked) {
-          showNearbyTooltip(t, `⚠️ Email leaked: ${data.breaches?.length || 1} breach(es). Click extension for details.`);
+        if (data && data.success && data.breaches_found > 0) {
+          showNearbyTooltip(t, `⚠️ Email leaked: ${data.breaches_found} breach(es). Click extension for details.`);
         } else {
-          showNearbyTooltip(t, `✅ No known leaks found (cached or network).`);
+          showNearbyTooltip(t, `✅ No known leaks found.`);
         }
       });
     }
@@ -92,13 +92,13 @@ chrome.runtime.onMessage.addListener((msg) => {
         el.textContent = `Error: ${msg.result.message}`;
       } else {
         const d = msg.result.data;
-        el.textContent = d && d.leaked ? `⚠️ Leaked — ${d.breaches?.length || 1} breach(es)` : "✅ No known leaks";
+        el.textContent = d && d.success && d.breaches_found > 0 ? `⚠️ Leaked — ${d.breaches_found} breach(es)` : "✅ No known leaks";
       }
       document.body.appendChild(el);
       setTimeout(() => el.remove(), 7000);
     } else {
       // fallback notify
-      alert(msg.email + ": " + (msg.result.error ? msg.result.message : (msg.result.data.leaked ? "Leaked" : "No known leaks")));
+      alert(msg.email + ": " + (msg.result.error ? msg.result.message : (msg.result.data.success && msg.result.data.breaches_found > 0 ? `${msg.result.data.breaches_found} breach(es) found` : "No known leaks")));
     }
   }
 });
