@@ -37,6 +37,7 @@ scanBtn.addEventListener("click", async () => {
     status.textContent = `Found ${emails.length} email(s). Checking...`;
     // bulk check via background
     chrome.runtime.sendMessage({ type: "bulk-check-emails", emails }, (res) => {
+      console.log("Bulk check response:", res); // Debug log
       if (!res || !res.results) {
         status.textContent = "Error checking emails.";
         return;
@@ -45,6 +46,7 @@ scanBtn.addEventListener("click", async () => {
       const results = res.results;
       emails.forEach(e => {
         const r = results[e];
+        console.log(`Email ${e}:`, r); // Debug log for each email
         const li = document.createElement("li");
         li.innerHTML = `<strong>${e}</strong> — ${r && r.success && r.breaches_found > 0 ? `⚠️ ${r.breaches_found} breach(es)` : "✅ No known leaks" } <button data-email="${e}" class="detailsBtn">Details</button>`;
         resultsList.appendChild(li);
