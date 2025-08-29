@@ -11,6 +11,11 @@ A Chrome extension that checks if email addresses have been involved in data bre
 - 🔔 **Notifications**: Desktop notifications for scan results
 - 🛡️ **Privacy Focused**: Uses Bitlion proxy to protect your privacy
 
+### ✨ Related Repositories
+
+- **🌐 Chrome Extension**: <a href="https://github.com/ijlik/JD_011-AdiNugroho-LeakedEmailChecker">https://github.com/ijlik/JD_011-AdiNugroho-LeakedEmailChecker</a>
+- **🔌 REST API**: <a href="https://github.com/ijlik/JD_011-AdiNugroho-LeakedEmailChecker-Web">https://github.com/ijlik/JD_011-AdiNugroho-LeakedEmailChecker-Web</a>
+
 ## Screenshots
 
 The extension provides a clean popup interface and visual highlighting of compromised emails on web pages.
