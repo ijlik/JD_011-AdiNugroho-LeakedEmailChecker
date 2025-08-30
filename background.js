@@ -147,4 +147,10 @@ chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
     })();
     return true;
   }
+
+  if (msg && msg.type === "open-details-tab") {
+    // Open a new tab with the details page
+    chrome.tabs.create({ url: msg.url });
+    return true;
+  }
 });
