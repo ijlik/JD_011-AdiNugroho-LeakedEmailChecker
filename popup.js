@@ -2,6 +2,24 @@ const scanBtn = document.getElementById("scanBtn");
 const status = document.getElementById("status");
 const resultsList = document.getElementById("resultsList");
 
+// Debouncing utilities to prevent rapid clicks
+let isScanning = false;
+let detailsClickDebounce = new Set(); // Track which emails are being processed
+const DEBOUNCE_DELAY = 500; // 500ms debounce
+
+function debounceDetailsClick(email, callback) {
+  if (detailsClickDebounce.has(email)) {
+    return; // Already processing this email
+  }
+  
+  detailsClickDebounce.add(email);
+  callback();
+  
+  setTimeout(() => {
+    detailsClickDebounce.delete(email);
+  }, DEBOUNCE_DELAY);
+}
+
 // Load previous results when popup opens
 document.addEventListener("DOMContentLoaded", async () => {
   const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
@@ -29,20 +47,42 @@ async function displayResults(emails, results) {
     resultsList.appendChild(li);
   });
   
-  // add click handlers
+  // add click handlers with debouncing
   document.querySelectorAll(".detailsBtn").forEach(b => {
     b.addEventListener("click", (ev) => {
       const email = ev.target.dataset.email;
-      // open details page (extension page)
-      chrome.tabs.create({ url: chrome.runtime.getURL(`result.html?email=${encodeURIComponent(email)}`) });
+      
+      // Debounce to prevent multiple tabs for same email
+      debounceDetailsClick(email, () => {
+        // Disable button temporarily
+        ev.target.disabled = true;
+        ev.target.textContent = "Opening...";
+        
+        // open details page (extension page)
+        chrome.tabs.create({ url: chrome.runtime.getURL(`result.html?email=${encodeURIComponent(email)}`) });
+        
+        // Re-enable button after delay
+        setTimeout(() => {
+          ev.target.disabled = false;
+          ev.target.textContent = "Details";
+        }, DEBOUNCE_DELAY);
+      });
     });
   });
 }
 
 scanBtn.addEventListener("click", async () => {
+  // Prevent multiple simultaneous scans
+  if (isScanning) {
+    return;
+  }
+  
+  isScanning = true;
+  scanBtn.disabled = true;
   resultsList.innerHTML = "";
   status.textContent = "Scanning page...";
-  scanBtn.textContent = "Scan page for emails";
+  scanBtn.textContent = "Scanning...";
+  
   const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
   // run script to extract visible emails
   chrome.scripting.executeScript({
@@ -94,6 +134,9 @@ scanBtn.addEventListener("click", async () => {
     if (!emails.length) {
       status.textContent = "No emails found on the page.";
       scanBtn.textContent = "Scan page for emails";
+      // Re-enable scan button
+      isScanning = false;
+      scanBtn.disabled = false;
       return;
     }
     status.textContent = `Found ${emails.length} email(s). Checking...`;
@@ -102,6 +145,10 @@ scanBtn.addEventListener("click", async () => {
       console.log("Bulk check response:", res); // Debug log
       if (!res || !res.results) {
         status.textContent = "Error checking emails.";
+        // Re-enable scan button on error
+        isScanning = false;
+        scanBtn.disabled = false;
+        scanBtn.textContent = "Scan page for emails";
         return;
       }
       
@@ -124,6 +171,10 @@ scanBtn.addEventListener("click", async () => {
       displayResults(emails, results);
       status.textContent = "Done. Click Details for more info.";
       scanBtn.textContent = "Rescan page for emails";
+      
+      // Re-enable scan button
+      isScanning = false;
+      scanBtn.disabled = false;
     });
   });
 });

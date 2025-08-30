@@ -1,5 +1,7 @@
 const EMAIL_REGEX = /[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-z]{2,}/g;
 let inputDebounce = null;
+let detailsClickDebounce = new Set(); // Track which emails are being processed for details
+const DETAILS_DEBOUNCE_DELAY = 500; // 500ms debounce for details clicks
 
 function isEmail(email) {
   // Enhanced email validation to match background.js and popup.js
@@ -47,14 +49,30 @@ function createClickableTooltip(text, email, breaches) {
   el.style.cursor = "pointer";
   el.style.userSelect = "none";
   
-  // Add click handler
+  // Add click handler with debouncing
   el.addEventListener("click", () => {
+    // Prevent multiple rapid clicks for same email
+    if (detailsClickDebounce.has(email)) {
+      return;
+    }
+    
+    detailsClickDebounce.add(email);
+    
+    // Visual feedback
+    el.style.opacity = "0.5";
+    el.style.pointerEvents = "none";
+    
     const detailsUrl = chrome.runtime.getURL(`result.html?email=${encodeURIComponent(email)}`);
     chrome.runtime.sendMessage({ 
       type: "open-details-tab", 
       url: detailsUrl 
     });
     el.remove();
+    
+    // Clean up debounce after delay
+    setTimeout(() => {
+      detailsClickDebounce.delete(email);
+    }, DETAILS_DEBOUNCE_DELAY);
   });
   
   // Add hover effect

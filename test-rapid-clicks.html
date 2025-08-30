@@ -1,0 +1,130 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Test Rapid Clicks - Chrome Extension Test</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            max-width: 800px;
+            margin: 0 auto;
+            padding: 20px;
+        }
+        .test-section {
+            margin: 20px 0;
+            padding: 15px;
+            border: 1px solid #ddd;
+            border-radius: 5px;
+        }
+        .email {
+            background-color: #f9f9f9;
+            padding: 5px;
+            margin: 5px 0;
+            border-radius: 3px;
+        }
+        .instructions {
+            background-color: #e7f3ff;
+            padding: 10px;
+            border-radius: 5px;
+            margin-bottom: 20px;
+        }
+        .expected {
+            background-color: #f0f8ff;
+            padding: 10px;
+            border-radius: 5px;
+            margin-top: 10px;
+        }
+    </style>
+</head>
+<body>
+    <h1>Test Case #8: Rapid Click Prevention</h1>
+    
+    <div class="instructions">
+        <h3>Testing Instructions:</h3>
+        <ol>
+            <li>Open Chrome extension popup and scan this page</li>
+            <li>Test rapid clicking on the "Details" buttons in popup</li>
+            <li>Test rapid clicking on highlighted emails on this page</li>
+            <li>Test rapid clicking on the "Scan" button</li>
+            <li>Monitor console for any error messages</li>
+        </ol>
+    </div>
+
+    <div class="test-section">
+        <h3>Test Scenario 1: Multiple Valid Emails</h3>
+        <p>Rapidly click Details buttons for these emails in the popup:</p>
+        <div class="email">john.doe@example.com</div>
+        <div class="email">jane.smith@test.org</div>
+        <div class="email">admin@company.co.uk</div>
+        <div class="email">user123@domain.net</div>
+        <div class="email">contact@website.info</div>
+        
+        <div class="expected">
+            <strong>Expected Result:</strong> Only one Details tab should open per email, even with rapid clicking. Buttons should be disabled during processing.
+        </div>
+    </div>
+
+    <div class="test-section">
+        <h3>Test Scenario 2: Rapid Scan Button Clicks</h3>
+        <p>Click the "Scan" button multiple times rapidly:</p>
+        <div class="email">support@rapidtest.com</div>
+        <div class="email">feedback@clicktest.org</div>
+        
+        <div class="expected">
+            <strong>Expected Result:</strong> Only one scan should execute. Scan button should be disabled during processing and show "Scanning..." text.
+        </div>
+    </div>
+
+    <div class="test-section">
+        <h3>Test Scenario 3: Rapid Tooltip Clicks</h3>
+        <p>After scanning, rapidly click on the same highlighted email multiple times:</p>
+        <div class="email">tooltip@rapidclick.com</div>
+        <div class="email">multiple@clicks.test</div>
+        
+        <div class="expected">
+            <strong>Expected Result:</strong> Only one Details tab should open per email. Tooltips should show visual feedback (opacity change) and be temporarily disabled.
+        </div>
+    </div>
+
+    <div class="test-section">
+        <h3>Test Scenario 4: Mixed Rapid Actions</h3>
+        <p>Combine rapid actions: scan, then immediately click Details in popup and tooltips:</p>
+        <div class="email">mixed@actions.test</div>
+        <div class="email">combined@rapid.clicks</div>
+        <div class="email">stress@test.example</div>
+        
+        <div class="expected">
+            <strong>Expected Result:</strong> All actions should be properly debounced. No duplicate tabs or API calls should occur.
+        </div>
+    </div>
+
+    <div class="test-section">
+        <h3>Console Monitoring</h3>
+        <p>Open Developer Tools (F12) and check the Console tab for:</p>
+        <ul>
+            <li>No duplicate API requests to Bitlion</li>
+            <li>Proper debouncing messages</li>
+            <li>No JavaScript errors</li>
+            <li>Clean handling of rapid actions</li>
+        </ul>
+        
+        <div class="expected">
+            <strong>Expected Result:</strong> Clean console output with proper debouncing behavior and no errors.
+        </div>
+    </div>
+
+    <script>
+        // Add some debug logging
+        console.log('Rapid clicks test page loaded');
+        console.log('Total emails on page:', document.querySelectorAll('.email').length);
+        
+        // Monitor clicks for testing
+        document.addEventListener('click', (e) => {
+            if (e.target.closest('.email')) {
+                console.log('Email element clicked:', e.target.textContent.trim());
+            }
+        });
+    </script>
+</body>
+</html>
