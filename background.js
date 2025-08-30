@@ -2,6 +2,16 @@ const API_BASE = "https://email-check.bitlion.io/api/search";
 // const CACHE_TTL_MS = 7 * 24 * 60 * 60 * 1000; // 7 days
 const CACHE_TTL_MS = 1 * 1000; // 1 second
 
+// Rate limiting configuration
+const RATE_LIMIT = {
+  MAX_REQUESTS_PER_MINUTE: 10,
+  INTERVAL_MS: 60 * 1000, // 1 minute
+  requestQueue: [],
+  processing: false,
+  requestCount: 0,
+  lastReset: Date.now()
+};
+
 // Email validation helper function
 function isValidEmail(email) {
   if (!email || typeof email !== 'string') return false;
@@ -16,6 +26,71 @@ function isValidEmail(email) {
   if (localPart.length > 64) return false; // RFC 5321 limit
   
   return true;
+}
+
+// Rate limiting and queue management
+function resetRateLimit() {
+  const now = Date.now();
+  if (now - RATE_LIMIT.lastReset >= RATE_LIMIT.INTERVAL_MS) {
+    RATE_LIMIT.requestCount = 0;
+    RATE_LIMIT.lastReset = now;
+  }
+}
+
+function canMakeRequest() {
+  resetRateLimit();
+  return RATE_LIMIT.requestCount < RATE_LIMIT.MAX_REQUESTS_PER_MINUTE;
+}
+
+function processQueue() {
+  if (RATE_LIMIT.processing || RATE_LIMIT.requestQueue.length === 0) {
+    return;
+  }
+  
+  RATE_LIMIT.processing = true;
+  
+  const processNext = async () => {
+    if (RATE_LIMIT.requestQueue.length === 0) {
+      RATE_LIMIT.processing = false;
+      return;
+    }
+    
+    if (!canMakeRequest()) {
+      // Wait until next minute to process more
+      const timeToWait = RATE_LIMIT.INTERVAL_MS - (Date.now() - RATE_LIMIT.lastReset);
+      setTimeout(processNext, timeToWait);
+      return;
+    }
+    
+    const { email, resolve, reject, sendUpdate } = RATE_LIMIT.requestQueue.shift();
+    RATE_LIMIT.requestCount++;
+    
+    try {
+      const result = await callApi(email);
+      resolve(result);
+      // Notify popup of the update
+      if (sendUpdate) {
+        sendUpdate(email, result);
+      }
+    } catch (error) {
+      reject(error);
+      if (sendUpdate) {
+        sendUpdate(email, { error: true, message: error.message });
+      }
+    }
+    
+    // Process next item with a small delay
+    setTimeout(processNext, 100);
+  };
+  
+  processNext();
+}
+
+function queueEmailCheck(email, sendUpdate) {
+  return new Promise((resolve, reject) => {
+    RATE_LIMIT.requestQueue.push({ email, resolve, reject, sendUpdate });
+    processQueue();
+  });
 }
 
 // create context menu - initially hidden
@@ -155,20 +230,76 @@ chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
   }
 
   if (msg && msg.type === "bulk-check-emails") {
-    // msg.emails: array
+    // msg.emails: array, sender: popup tab info
     (async () => {
       try {
-        const out = {};
-        for (const e of msg.emails) {
-          const result = await callApi(e);
-          // Store the actual API response data, not the wrapper
-          if (result.error) {
-            out[e] = { error: true, message: result.message };
-          } else {
-            out[e] = result.data; // This contains the API response with success, breaches_found, etc.
-          }
+        const results = {};
+        const emailStatuses = {};
+        
+        // Initialize all emails as pending
+        for (const email of msg.emails) {
+          results[email] = { status: 'pending', message: 'Queued for checking...' };
+          emailStatuses[email] = 'pending';
         }
-        sendResponse({ results: out });
+        
+        // Send initial response with all emails pending
+        sendResponse({ 
+          results: results, 
+          allEmails: msg.emails,
+          queueStatus: 'started' 
+        });
+        
+        // Function to update storage with progress
+        const updateProgress = async (email, result) => {
+          try {
+            // Get current tab to determine storage key
+            const tabs = await chrome.tabs.query({ active: true, currentWindow: true });
+            if (tabs[0]) {
+              const tabUrl = tabs[0].url;
+              const storageKey = `popup_results_${tabUrl}`;
+              const stored = await chrome.storage.local.get(storageKey);
+              
+              if (stored[storageKey]) {
+                const data = stored[storageKey];
+                data.results[email] = result.error ? 
+                  { error: true, message: result.message } : 
+                  result.data;
+                data.timestamp = Date.now();
+                
+                const storageObj = {};
+                storageObj[storageKey] = data;
+                await chrome.storage.local.set(storageObj);
+                
+                // Broadcast update to any listening popups
+                chrome.runtime.sendMessage({
+                  type: 'queue-progress-update',
+                  email: email,
+                  result: result.error ? { error: true, message: result.message } : result.data,
+                  allEmails: msg.emails,
+                  tabUrl: tabUrl
+                }).catch(() => {
+                  // Popup might be closed, that's OK
+                });
+              }
+            }
+          } catch (error) {
+            console.error('Error updating progress:', error);
+          }
+        };
+        
+        // Queue all emails for processing
+        for (const email of msg.emails) {
+          queueEmailCheck(email, updateProgress).then(result => {
+            results[email] = result.error ? 
+              { error: true, message: result.message } : 
+              result.data;
+            emailStatuses[email] = 'completed';
+          }).catch(error => {
+            results[email] = { error: true, message: error.message };
+            emailStatuses[email] = 'error';
+          });
+        }
+        
       } catch (err) {
         console.error("Error in bulk-check-emails:", err);
         try {

@@ -10,6 +10,12 @@ button:hover { box-shadow: 0 2px 8px rgba(0,0,0,0.08); }
 .container ul { list-style: none; padding: 0; }
 .detailsBtn { font-size: 13px; padding: 6px 10px; margin-left: 8px; font-weight: 500; }
 
+/* Email status indicators */
+.status-pending { color: #856404; background-color: #fff3cd; padding: 2px 6px; border-radius: 4px; font-size: 13px; }
+.status-safe { color: #155724; background-color: #d4edda; padding: 2px 6px; border-radius: 4px; font-size: 13px; }
+.status-leaked { color: #721c24; background-color: #f8d7da; padding: 2px 6px; border-radius: 4px; font-size: 13px; }
+.status-error { color: #495057; background-color: #e9ecef; padding: 2px 6px; border-radius: 4px; font-size: 13px; }
+
 /* Result page specific styles */
 .subtitle { color: #666; font-size: 16px; margin: 10px 0 20px 0; text-align: center; }
 
