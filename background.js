@@ -2,15 +2,13 @@ const API_BASE = "https://email-check.bitlion.io/api/search";
 // const CACHE_TTL_MS = 7 * 24 * 60 * 60 * 1000; // 7 days
 const CACHE_TTL_MS = 1 * 1000; // 1 second
 
-// Rate limiting configuration
+// Rate limiting configuration - simplified to just queue management
 const RATE_LIMIT = {
-  MAX_REQUESTS_PER_MINUTE: 10,
-  INTERVAL_MS: 60 * 1000, // 1 minute
   requestQueue: [],
   processing: false,
-  requestCount: 0,
-  lastReset: Date.now(),
-  processingTimeout: null  // Add timeout tracking
+  processingTimeout: null,
+  waitingForRateLimit: false,
+  rateLimitCountdown: null
 };
 
 // Email validation helper function
@@ -29,27 +27,10 @@ function isValidEmail(email) {
   return true;
 }
 
-// Rate limiting and queue management
-function resetRateLimit() {
-  const now = Date.now();
-  if (now - RATE_LIMIT.lastReset >= RATE_LIMIT.INTERVAL_MS) {
-    console.log(`Rate limit reset. Previous count: ${RATE_LIMIT.requestCount}`);
-    RATE_LIMIT.requestCount = 0;
-    RATE_LIMIT.lastReset = now;
-  }
-}
-
-function canMakeRequest() {
-  resetRateLimit();
-  const canMake = RATE_LIMIT.requestCount < RATE_LIMIT.MAX_REQUESTS_PER_MINUTE;
-  console.log(`canMakeRequest: ${canMake} (${RATE_LIMIT.requestCount}/${RATE_LIMIT.MAX_REQUESTS_PER_MINUTE})`);
-  return canMake;
-}
-
 function processQueue() {
-  console.log(`processQueue called. Processing: ${RATE_LIMIT.processing}, Queue length: ${RATE_LIMIT.requestQueue.length}`);
+  console.log(`processQueue called. Processing: ${RATE_LIMIT.processing}, Queue length: ${RATE_LIMIT.requestQueue.length}, Waiting for rate limit: ${RATE_LIMIT.waitingForRateLimit}`);
   
-  if (RATE_LIMIT.processing || RATE_LIMIT.requestQueue.length === 0) {
+  if (RATE_LIMIT.processing || RATE_LIMIT.requestQueue.length === 0 || RATE_LIMIT.waitingForRateLimit) {
     return;
   }
   
@@ -81,18 +62,10 @@ function processQueue() {
       return;
     }
     
-    if (!canMakeRequest()) {
-      // Wait until next minute to process more
-      const timeToWait = RATE_LIMIT.INTERVAL_MS - (Date.now() - RATE_LIMIT.lastReset);
-      console.log(`Rate limit hit, waiting ${timeToWait}ms until next batch`);
-      setTimeout(processNext, timeToWait);
-      return;
-    }
-    
+    // No more client-side rate limiting - process immediately
     const { email, resolve, reject, sendUpdate } = RATE_LIMIT.requestQueue.shift();
-    RATE_LIMIT.requestCount++;
     
-    console.log(`Processing email from queue: ${email} (${RATE_LIMIT.requestCount}/10 this minute)`);
+    console.log(`Processing email from queue: ${email} (${RATE_LIMIT.requestQueue.length} remaining)`);
     
     try {
       const result = await callApi(email);
@@ -103,10 +76,9 @@ function processQueue() {
         
         // Put the email back at the front of the queue
         RATE_LIMIT.requestQueue.unshift({ email, resolve, reject, sendUpdate });
-        RATE_LIMIT.requestCount--; // Don't count this as a successful request
         
-        // Pause processing for 1 minute
-        setTimeout(processNext, 60000); // 1 minute
+        // Start rate limit wait with countdown
+        startRateLimitWait();
         return;
       }
       
@@ -124,12 +96,45 @@ function processQueue() {
       }
     }
     
-    // Process next item with a small delay
-    console.log(`Finished processing ${email}, scheduling next in 100ms`);
-    setTimeout(processNext, 100);
+    // Process next item immediately (no artificial delay)
+    console.log(`Finished processing ${email}, processing next immediately`);
+    setTimeout(processNext, 0);
   };
   
   processNext();
+}
+
+// Function to handle rate limit waiting with countdown
+function startRateLimitWait() {
+  if (RATE_LIMIT.waitingForRateLimit) {
+    return; // Already waiting
+  }
+  
+  RATE_LIMIT.waitingForRateLimit = true;
+  RATE_LIMIT.processing = false; // Allow other operations but mark as waiting
+  
+  const waitTime = 60; // 60 seconds
+  let remainingTime = waitTime;
+  
+  console.log(`Rate limit exceeded - waiting 1 minute before retrying. Queue has ${RATE_LIMIT.requestQueue.length} emails pending.`);
+  
+  // Countdown timer for keep alive
+  const countdownInterval = setInterval(() => {
+    console.log(`Rate limit countdown: ${remainingTime} seconds remaining (Queue: ${RATE_LIMIT.requestQueue.length} emails)`);
+    remainingTime--;
+    
+    if (remainingTime <= 0) {
+      clearInterval(countdownInterval);
+      RATE_LIMIT.waitingForRateLimit = false;
+      
+      console.log('Rate limit wait completed - resuming queue processing');
+      
+      // Resume processing if there are items in the queue
+      if (RATE_LIMIT.requestQueue.length > 0) {
+        processQueue();
+      }
+    }
+  }, 1000); // Log every second
 }
 
 function queueEmailCheck(email, sendUpdate) {
@@ -143,10 +148,8 @@ function queueEmailCheck(email, sendUpdate) {
 function checkQueueStatus() {
   console.log('=== Queue Status ===');
   console.log(`Processing: ${RATE_LIMIT.processing}`);
+  console.log(`Waiting for rate limit: ${RATE_LIMIT.waitingForRateLimit}`);
   console.log(`Queue length: ${RATE_LIMIT.requestQueue.length}`);
-  console.log(`Request count: ${RATE_LIMIT.requestCount}/${RATE_LIMIT.MAX_REQUESTS_PER_MINUTE}`);
-  console.log(`Last reset: ${new Date(RATE_LIMIT.lastReset)}`);
-  console.log(`Time since reset: ${Date.now() - RATE_LIMIT.lastReset}ms`);
   if (RATE_LIMIT.requestQueue.length > 0) {
     console.log(`Next emails in queue:`, RATE_LIMIT.requestQueue.slice(0, 5).map(item => item.email));
   }
