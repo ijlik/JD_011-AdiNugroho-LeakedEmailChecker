@@ -2,14 +2,192 @@ const API_BASE = "https://email-check.bitlion.io/api/search";
 // const CACHE_TTL_MS = 7 * 24 * 60 * 60 * 1000; // 7 days
 const CACHE_TTL_MS = 1 * 1000; // 1 second
 
-// create context menu
+// Rate limiting configuration - simplified to just queue management
+const RATE_LIMIT = {
+  requestQueue: [],
+  processing: false,
+  processingTimeout: null,
+  waitingForRateLimit: false,
+  rateLimitCountdown: null
+};
+
+// Email validation helper function
+function isValidEmail(email) {
+  if (!email || typeof email !== 'string') return false;
+  
+  // Basic email regex
+  const emailRegex = /^[a-zA-Z0-9.!#$%&'*+/=?^_`{|}~-]+@[a-zA-Z0-9](?:[a-zA-Z0-9-]{0,61}[a-zA-Z0-9])?(?:\.[a-zA-Z0-9](?:[a-zA-Z0-9-]{0,61}[a-zA-Z0-9])?)*$/;
+  
+  if (!emailRegex.test(email)) return false;
+  if (email.length > 320) return false; // RFC 5321 limit
+  
+  const localPart = email.split('@')[0];
+  if (localPart.length > 64) return false; // RFC 5321 limit
+  
+  return true;
+}
+
+function processQueue() {
+  console.log(`processQueue called. Processing: ${RATE_LIMIT.processing}, Queue length: ${RATE_LIMIT.requestQueue.length}, Waiting for rate limit: ${RATE_LIMIT.waitingForRateLimit}`);
+  
+  if (RATE_LIMIT.processing || RATE_LIMIT.requestQueue.length === 0 || RATE_LIMIT.waitingForRateLimit) {
+    return;
+  }
+  
+  RATE_LIMIT.processing = true;
+  
+  // Set timeout to reset processing flag if stuck
+  if (RATE_LIMIT.processingTimeout) {
+    clearTimeout(RATE_LIMIT.processingTimeout);
+  }
+  RATE_LIMIT.processingTimeout = setTimeout(() => {
+    console.warn('Queue processing timeout - resetting processing flag');
+    RATE_LIMIT.processing = false;
+    if (RATE_LIMIT.requestQueue.length > 0) {
+      console.log('Restarting queue processing after timeout');
+      processQueue();
+    }
+  }, 5 * 60 * 1000); // 5 minutes timeout
+  
+  const processNext = async () => {
+    console.log(`processNext called. Queue length: ${RATE_LIMIT.requestQueue.length}`);
+    
+    if (RATE_LIMIT.requestQueue.length === 0) {
+      console.log('Queue is empty, stopping processing');
+      RATE_LIMIT.processing = false;
+      if (RATE_LIMIT.processingTimeout) {
+        clearTimeout(RATE_LIMIT.processingTimeout);
+        RATE_LIMIT.processingTimeout = null;
+      }
+      return;
+    }
+    
+    // No more client-side rate limiting - process immediately
+    const { email, resolve, reject, sendUpdate } = RATE_LIMIT.requestQueue.shift();
+    
+    console.log(`Processing email from queue: ${email} (${RATE_LIMIT.requestQueue.length} remaining)`);
+    
+    try {
+      const result = await callApi(email);
+      
+      // Check if we hit API rate limit
+      if (result.error && result.rateLimitExceeded) {
+        console.warn(`API rate limit exceeded for ${email}, pausing queue for 1 minute`);
+        
+        // Put the email back at the front of the queue
+        RATE_LIMIT.requestQueue.unshift({ email, resolve, reject, sendUpdate });
+        
+        // Start rate limit wait with countdown
+        startRateLimitWait();
+        return;
+      }
+      
+      resolve(result);
+      // Notify popup of the update
+      if (sendUpdate) {
+        console.log(`Calling sendUpdate for ${email}:`, result);
+        await sendUpdate(email, result);
+      }
+    } catch (error) {
+      console.error(`Error processing email ${email}:`, error);
+      reject(error);
+      if (sendUpdate) {
+        await sendUpdate(email, { error: true, message: error.message });
+      }
+    }
+    
+    // Process next item immediately (no artificial delay)
+    console.log(`Finished processing ${email}, processing next immediately`);
+    setTimeout(processNext, 0);
+  };
+  
+  processNext();
+}
+
+// Function to handle rate limit waiting with countdown
+function startRateLimitWait() {
+  if (RATE_LIMIT.waitingForRateLimit) {
+    return; // Already waiting
+  }
+  
+  RATE_LIMIT.waitingForRateLimit = true;
+  RATE_LIMIT.processing = false; // Allow other operations but mark as waiting
+  
+  const waitTime = 60; // 60 seconds
+  let remainingTime = waitTime;
+  
+  console.log(`Rate limit exceeded - waiting 1 minute before retrying. Queue has ${RATE_LIMIT.requestQueue.length} emails pending.`);
+  
+  // Countdown timer for keep alive
+  const countdownInterval = setInterval(() => {
+    console.log(`Rate limit countdown: ${remainingTime} seconds remaining (Queue: ${RATE_LIMIT.requestQueue.length} emails)`);
+    remainingTime--;
+    
+    if (remainingTime <= 0) {
+      clearInterval(countdownInterval);
+      RATE_LIMIT.waitingForRateLimit = false;
+      
+      console.log('Rate limit wait completed - resuming queue processing');
+      
+      // Resume processing if there are items in the queue
+      if (RATE_LIMIT.requestQueue.length > 0) {
+        processQueue();
+      }
+    }
+  }, 1000); // Log every second
+}
+
+function queueEmailCheck(email, sendUpdate) {
+  return new Promise((resolve, reject) => {
+    RATE_LIMIT.requestQueue.push({ email, resolve, reject, sendUpdate });
+    processQueue();
+  });
+}
+
+// Debug function to check queue status
+function checkQueueStatus() {
+  console.log('=== Queue Status ===');
+  console.log(`Processing: ${RATE_LIMIT.processing}`);
+  console.log(`Waiting for rate limit: ${RATE_LIMIT.waitingForRateLimit}`);
+  console.log(`Queue length: ${RATE_LIMIT.requestQueue.length}`);
+  if (RATE_LIMIT.requestQueue.length > 0) {
+    console.log(`Next emails in queue:`, RATE_LIMIT.requestQueue.slice(0, 5).map(item => item.email));
+  }
+  console.log('==================');
+}
+
+// Periodic queue status check
+setInterval(checkQueueStatus, 30000); // Check every 30 seconds
+
+// create context menu - initially hidden
 chrome.runtime.onInstalled.addListener(() => {
+  // Don't create context menu on install - it will be created dynamically
+});
+
+// Handle dynamic context menu creation based on selection
+let currentContextMenuId = null;
+
+function createContextMenuForEmail() {
+  if (currentContextMenuId) return; // Already exists
+  
   chrome.contextMenus.create({
     id: "check-email-selection",
     title: "Check if leaked",
-    contexts: ["selection", "link", "editable"]
+    contexts: ["selection"]
+  }, () => {
+    if (!chrome.runtime.lastError) {
+      currentContextMenuId = "check-email-selection";
+    }
   });
-});
+}
+
+function removeContextMenu() {
+  if (!currentContextMenuId) return; // Already removed
+  
+  chrome.contextMenus.remove(currentContextMenuId, () => {
+    currentContextMenuId = null;
+  });
+}
 
 // helper: get cache
 async function getCached(email) {
@@ -50,11 +228,34 @@ async function callApi(email) {
     }
     const data = await res.json();
     console.log(`API response for ${email}:`, data); // Debug log
+    
+    // Check if the response contains a rate limit error
+    if (data.error && data.message && data.message.includes('Rate limit exceeded')) {
+      console.warn(`Rate limit exceeded from API for ${email}`);
+      return { 
+        error: true, 
+        message: data.message, 
+        rateLimitExceeded: true 
+      };
+    }
+    
     await setCache(email, data);
     return { source: "network", data };
   } catch (err) {
     console.error("callApi error", err);
-    return { error: true, message: err.message };
+    
+    // Check if error message contains rate limit info
+    const isRateLimit = err.message && (
+      err.message.includes('Rate limit exceeded') || 
+      err.message.includes('429') ||
+      err.message.includes('Too Many Requests')
+    );
+    
+    return { 
+      error: true, 
+      message: err.message,
+      rateLimitExceeded: isRateLimit
+    };
   }
 }
 
@@ -65,14 +266,10 @@ chrome.contextMenus.onClicked.addListener(async (info, tab) => {
     email = info.linkUrl.replace(/^mailto:/i, "");
   }
   email = email && email.trim();
-  if (!email) {
-    chrome.notifications.create({
-      type: "basic",
-      iconUrl: "icons/icon48.png",
-      title: "Leaked Email Checker",
-      message: "No email detected to check."
-    });
-    return;
+  
+  // Validate email format - if not valid, silently ignore
+  if (!email || !isValidEmail(email)) {
+    return; // Don't show any notification, just ignore
   }
 
   const result = await callApi(email);
@@ -122,20 +319,100 @@ chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
   }
 
   if (msg && msg.type === "bulk-check-emails") {
-    // msg.emails: array
+    // msg.emails: array, sender: popup tab info
     (async () => {
       try {
-        const out = {};
-        for (const e of msg.emails) {
-          const result = await callApi(e);
-          // Store the actual API response data, not the wrapper
-          if (result.error) {
-            out[e] = { error: true, message: result.message };
-          } else {
-            out[e] = result.data; // This contains the API response with success, breaches_found, etc.
-          }
+        const results = {};
+        const emailStatuses = {};
+        
+        // Capture sender tab URL at the start for use in updateProgress
+        const senderTabUrl = msg.tabUrl || (sender && sender.tab ? sender.tab.url : null);
+        console.log('Captured sender tab URL:', senderTabUrl);
+        
+        // Initialize all emails as pending
+        for (const email of msg.emails) {
+          results[email] = { status: 'pending', message: 'Queued for checking...' };
+          emailStatuses[email] = 'pending';
         }
-        sendResponse({ results: out });
+        
+        // Send initial response with all emails pending
+        sendResponse({ 
+          results: results, 
+          allEmails: msg.emails,
+          queueStatus: 'started' 
+        });
+        
+        // Function to update storage with progress
+        const updateProgress = async (email, result) => {
+          console.log(`updateProgress called for ${email}:`, result);
+          try {
+            // Use the captured sender tab URL first
+            let tabUrl = senderTabUrl;
+            
+            if (!tabUrl) {
+              // Fallback: try to get current active tab
+              const tabs = await chrome.tabs.query({ active: true, currentWindow: true });
+              console.log(`Fallback - Active tabs found:`, tabs.length);
+              if (tabs[0]) {
+                tabUrl = tabs[0].url;
+              } else {
+                console.error('No tab URL available for storage update');
+                return;
+              }
+            }
+            
+            const storageKey = `popup_results_${tabUrl}`;
+            console.log(`Using storage key: ${storageKey}`);
+            
+            const stored = await chrome.storage.local.get(storageKey);
+            console.log(`Current stored data for ${storageKey}:`, stored);
+            
+            if (stored[storageKey]) {
+              const data = stored[storageKey];
+              data.results[email] = result.error ? 
+                { error: true, message: result.message } : 
+                result.data;
+              data.timestamp = Date.now();
+              
+              console.log(`Updating storage for ${email}:`, data.results[email]);
+              
+              const storageObj = {};
+              storageObj[storageKey] = data;
+              await chrome.storage.local.set(storageObj);
+              
+              console.log(`Storage updated successfully for ${email}`);
+              
+              // Broadcast update to any listening popups
+              chrome.runtime.sendMessage({
+                type: 'queue-progress-update',
+                email: email,
+                result: result.error ? { error: true, message: result.message } : result.data,
+                allEmails: msg.emails,
+                tabUrl: tabUrl
+              }).catch((error) => {
+                console.log('No popup listening, that\'s OK:', error.message);
+              });
+            } else {
+              console.error(`No stored data found for key: ${storageKey}`);
+            }
+          } catch (error) {
+            console.error('Error updating progress:', error);
+          }
+        };
+        
+        // Queue all emails for processing
+        for (const email of msg.emails) {
+          queueEmailCheck(email, updateProgress).then(result => {
+            results[email] = result.error ? 
+              { error: true, message: result.message } : 
+              result.data;
+            emailStatuses[email] = 'completed';
+          }).catch(error => {
+            results[email] = { error: true, message: error.message };
+            emailStatuses[email] = 'error';
+          });
+        }
+        
       } catch (err) {
         console.error("Error in bulk-check-emails:", err);
         try {
@@ -145,6 +422,22 @@ chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
         }
       }
     })();
+    return true;
+  }
+
+  if (msg && msg.type === "open-details-tab") {
+    // Open a new tab with the details page
+    chrome.tabs.create({ url: msg.url });
+    return true;
+  }
+
+  if (msg && msg.type === "selection-changed") {
+    // Handle selection change for dynamic context menu
+    if (msg.hasSelection && isValidEmail(msg.text)) {
+      createContextMenuForEmail();
+    } else {
+      removeContextMenu();
+    }
     return true;
   }
 });
