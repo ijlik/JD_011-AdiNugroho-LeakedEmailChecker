@@ -32,6 +32,7 @@ function isValidEmail(email) {
 function resetRateLimit() {
   const now = Date.now();
   if (now - RATE_LIMIT.lastReset >= RATE_LIMIT.INTERVAL_MS) {
+    console.log(`Rate limit reset. Previous count: ${RATE_LIMIT.requestCount}`);
     RATE_LIMIT.requestCount = 0;
     RATE_LIMIT.lastReset = now;
   }
@@ -39,10 +40,14 @@ function resetRateLimit() {
 
 function canMakeRequest() {
   resetRateLimit();
-  return RATE_LIMIT.requestCount < RATE_LIMIT.MAX_REQUESTS_PER_MINUTE;
+  const canMake = RATE_LIMIT.requestCount < RATE_LIMIT.MAX_REQUESTS_PER_MINUTE;
+  console.log(`canMakeRequest: ${canMake} (${RATE_LIMIT.requestCount}/${RATE_LIMIT.MAX_REQUESTS_PER_MINUTE})`);
+  return canMake;
 }
 
 function processQueue() {
+  console.log(`processQueue called. Processing: ${RATE_LIMIT.processing}, Queue length: ${RATE_LIMIT.requestQueue.length}`);
+  
   if (RATE_LIMIT.processing || RATE_LIMIT.requestQueue.length === 0) {
     return;
   }
@@ -50,7 +55,10 @@ function processQueue() {
   RATE_LIMIT.processing = true;
   
   const processNext = async () => {
+    console.log(`processNext called. Queue length: ${RATE_LIMIT.requestQueue.length}`);
+    
     if (RATE_LIMIT.requestQueue.length === 0) {
+      console.log('Queue is empty, stopping processing');
       RATE_LIMIT.processing = false;
       return;
     }
@@ -58,6 +66,7 @@ function processQueue() {
     if (!canMakeRequest()) {
       // Wait until next minute to process more
       const timeToWait = RATE_LIMIT.INTERVAL_MS - (Date.now() - RATE_LIMIT.lastReset);
+      console.log(`Rate limit hit, waiting ${timeToWait}ms until next batch`);
       setTimeout(processNext, timeToWait);
       return;
     }
@@ -65,17 +74,21 @@ function processQueue() {
     const { email, resolve, reject, sendUpdate } = RATE_LIMIT.requestQueue.shift();
     RATE_LIMIT.requestCount++;
     
+    console.log(`Processing email from queue: ${email} (${RATE_LIMIT.requestCount}/10 this minute)`);
+    
     try {
       const result = await callApi(email);
       resolve(result);
       // Notify popup of the update
       if (sendUpdate) {
-        sendUpdate(email, result);
+        console.log(`Calling sendUpdate for ${email}:`, result);
+        await sendUpdate(email, result);
       }
     } catch (error) {
+      console.error(`Error processing email ${email}:`, error);
       reject(error);
       if (sendUpdate) {
-        sendUpdate(email, { error: true, message: error.message });
+        await sendUpdate(email, { error: true, message: error.message });
       }
     }
     
@@ -251,13 +264,18 @@ chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
         
         // Function to update storage with progress
         const updateProgress = async (email, result) => {
+          console.log(`updateProgress called for ${email}:`, result);
           try {
             // Get current tab to determine storage key
             const tabs = await chrome.tabs.query({ active: true, currentWindow: true });
+            console.log(`Active tabs found:`, tabs.length);
             if (tabs[0]) {
               const tabUrl = tabs[0].url;
               const storageKey = `popup_results_${tabUrl}`;
+              console.log(`Storage key: ${storageKey}`);
+              
               const stored = await chrome.storage.local.get(storageKey);
+              console.log(`Current stored data:`, stored);
               
               if (stored[storageKey]) {
                 const data = stored[storageKey];
@@ -266,9 +284,13 @@ chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
                   result.data;
                 data.timestamp = Date.now();
                 
+                console.log(`Updating storage for ${email}:`, data.results[email]);
+                
                 const storageObj = {};
                 storageObj[storageKey] = data;
                 await chrome.storage.local.set(storageObj);
+                
+                console.log(`Storage updated successfully for ${email}`);
                 
                 // Broadcast update to any listening popups
                 chrome.runtime.sendMessage({
@@ -277,10 +299,14 @@ chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
                   result: result.error ? { error: true, message: result.message } : result.data,
                   allEmails: msg.emails,
                   tabUrl: tabUrl
-                }).catch(() => {
-                  // Popup might be closed, that's OK
+                }).catch((error) => {
+                  console.log('No popup listening, that\'s OK:', error.message);
                 });
+              } else {
+                console.error(`No stored data found for key: ${storageKey}`);
               }
+            } else {
+              console.error('No active tab found');
             }
           } catch (error) {
             console.error('Error updating progress:', error);

@@ -1,4 +1,5 @@
 const scanBtn = document.getElementById("scanBtn");
+const resetBtn = document.getElementById("resetBtn");
 const status = document.getElementById("status");
 const resultsList = document.getElementById("resultsList");
 
@@ -31,21 +32,30 @@ let pollInterval = null;
 function startPollingForUpdates(tabUrl) {
   if (pollInterval) return; // Already polling
   
+  console.log('Starting polling for updates, tabUrl:', tabUrl);
+  
   pollInterval = setInterval(async () => {
     if (!processingQueue) {
+      console.log('Processing queue finished, stopping polling');
       stopPollingForUpdates();
       return;
     }
     
+    console.log('Polling for updates...');
     const storageKey = `popup_results_${tabUrl}`;
     const stored = await chrome.storage.local.get(storageKey);
     const data = stored[storageKey];
+    
+    console.log('Polled data:', data);
     
     if (data && data.results) {
       // Check for updates
       let hasUpdates = false;
       for (const email of allEmails) {
-        if (JSON.stringify(currentResults[email]) !== JSON.stringify(data.results[email])) {
+        const oldResult = JSON.stringify(currentResults[email]);
+        const newResult = JSON.stringify(data.results[email]);
+        if (oldResult !== newResult) {
+          console.log(`Update detected for ${email}:`, data.results[email]);
           hasUpdates = true;
           currentResults[email] = data.results[email];
           updateEmailDisplay(email, data.results[email]);
@@ -58,12 +68,15 @@ function startPollingForUpdates(tabUrl) {
           !currentResults[e] || currentResults[e].status === 'pending'
         );
         
+        console.log(`Pending emails: ${pending.length}/${allEmails.length}`);
+        
         if (pending.length === 0) {
           status.textContent = `Done. All ${allEmails.length} emails checked. Click Details for more info.`;
           processingQueue = false;
           isScanning = false;
           scanBtn.disabled = false;
           scanBtn.textContent = "Rescan page for emails";
+          resetBtn.style.display = "none";
           stopPollingForUpdates();
         } else {
           status.textContent = `Checking emails... ${allEmails.length - pending.length}/${allEmails.length} completed`;
@@ -136,11 +149,13 @@ document.addEventListener("DOMContentLoaded", async () => {
       isScanning = true;
       scanBtn.disabled = true;
       scanBtn.textContent = "Processing...";
+      resetBtn.style.display = "inline-block"; // Show reset button when stuck
       startPollingForUpdates(tabUrl);
     } else {
       // All done
       status.textContent = "Showing previous scan results. Click 'Rescan' to scan again.";
       scanBtn.textContent = "Rescan page for emails";
+      resetBtn.style.display = "none";
     }
   }
 });
@@ -278,6 +293,7 @@ scanBtn.addEventListener("click", async () => {
   
   isScanning = true;
   scanBtn.disabled = true;
+  resetBtn.style.display = "inline-block"; // Show reset button during processing
   resultsList.innerHTML = "";
   status.textContent = "Scanning page...";
   scanBtn.textContent = "Scanning...";
@@ -388,4 +404,33 @@ scanBtn.addEventListener("click", async () => {
       }
     });
   });
+});
+
+// Reset button handler
+resetBtn.addEventListener("click", async () => {
+  console.log("Reset button clicked - clearing state");
+  
+  // Stop polling
+  stopPollingForUpdates();
+  
+  // Reset state
+  isScanning = false;
+  processingQueue = false;
+  currentResults = {};
+  allEmails = [];
+  
+  // Clear UI
+  resultsList.innerHTML = "";
+  status.textContent = "Reset complete. Click scan to find emails.";
+  scanBtn.disabled = false;
+  scanBtn.textContent = "Scan page for emails";
+  resetBtn.style.display = "none";
+  
+  // Clear storage for current tab
+  const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
+  if (tab) {
+    const storageKey = `popup_results_${tab.url}`;
+    await chrome.storage.local.remove(storageKey);
+    console.log(`Cleared storage for key: ${storageKey}`);
+  }
 });
