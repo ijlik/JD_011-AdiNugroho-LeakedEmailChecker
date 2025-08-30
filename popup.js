@@ -287,40 +287,6 @@ function addDetailsClickHandler(btn) {
   });
 }
 
-async function displayResults(emails, results) {
-  resultsList.innerHTML = "";
-  emails.forEach(e => {
-    const r = results[e];
-    console.log(`Email ${e}:`, r); // Debug log for each email
-    const li = document.createElement("li");
-    li.innerHTML = `<strong>${e}</strong><br>${r && r.success && r.breaches_found > 0 ? `⚠️ ${r.breaches_found} breach(es)` : "✅ No known leaks" } <button data-email="${e}" class="detailsBtn">Details</button>`;
-    resultsList.appendChild(li);
-  });
-  
-  // add click handlers with debouncing
-  document.querySelectorAll(".detailsBtn").forEach(b => {
-    b.addEventListener("click", (ev) => {
-      const email = ev.target.dataset.email;
-      
-      // Debounce to prevent multiple tabs for same email
-      debounceDetailsClick(email, () => {
-        // Disable button temporarily
-        ev.target.disabled = true;
-        ev.target.textContent = "Opening...";
-        
-        // open details page (extension page)
-        chrome.tabs.create({ url: chrome.runtime.getURL(`result.html?email=${encodeURIComponent(email)}`) });
-        
-        // Re-enable button after delay
-        setTimeout(() => {
-          ev.target.disabled = false;
-          ev.target.textContent = "Details";
-        }, DEBOUNCE_DELAY);
-      });
-    });
-  });
-}
-
 scanBtn.addEventListener("click", async () => {
   // Prevent multiple simultaneous scans
   if (isScanning) {

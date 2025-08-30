@@ -9,7 +9,8 @@ const RATE_LIMIT = {
   requestQueue: [],
   processing: false,
   requestCount: 0,
-  lastReset: Date.now()
+  lastReset: Date.now(),
+  processingTimeout: null  // Add timeout tracking
 };
 
 // Email validation helper function
@@ -54,12 +55,29 @@ function processQueue() {
   
   RATE_LIMIT.processing = true;
   
+  // Set timeout to reset processing flag if stuck
+  if (RATE_LIMIT.processingTimeout) {
+    clearTimeout(RATE_LIMIT.processingTimeout);
+  }
+  RATE_LIMIT.processingTimeout = setTimeout(() => {
+    console.warn('Queue processing timeout - resetting processing flag');
+    RATE_LIMIT.processing = false;
+    if (RATE_LIMIT.requestQueue.length > 0) {
+      console.log('Restarting queue processing after timeout');
+      processQueue();
+    }
+  }, 5 * 60 * 1000); // 5 minutes timeout
+  
   const processNext = async () => {
     console.log(`processNext called. Queue length: ${RATE_LIMIT.requestQueue.length}`);
     
     if (RATE_LIMIT.requestQueue.length === 0) {
       console.log('Queue is empty, stopping processing');
       RATE_LIMIT.processing = false;
+      if (RATE_LIMIT.processingTimeout) {
+        clearTimeout(RATE_LIMIT.processingTimeout);
+        RATE_LIMIT.processingTimeout = null;
+      }
       return;
     }
     
@@ -107,6 +125,7 @@ function processQueue() {
     }
     
     // Process next item with a small delay
+    console.log(`Finished processing ${email}, scheduling next in 100ms`);
     setTimeout(processNext, 100);
   };
   
@@ -119,6 +138,23 @@ function queueEmailCheck(email, sendUpdate) {
     processQueue();
   });
 }
+
+// Debug function to check queue status
+function checkQueueStatus() {
+  console.log('=== Queue Status ===');
+  console.log(`Processing: ${RATE_LIMIT.processing}`);
+  console.log(`Queue length: ${RATE_LIMIT.requestQueue.length}`);
+  console.log(`Request count: ${RATE_LIMIT.requestCount}/${RATE_LIMIT.MAX_REQUESTS_PER_MINUTE}`);
+  console.log(`Last reset: ${new Date(RATE_LIMIT.lastReset)}`);
+  console.log(`Time since reset: ${Date.now() - RATE_LIMIT.lastReset}ms`);
+  if (RATE_LIMIT.requestQueue.length > 0) {
+    console.log(`Next emails in queue:`, RATE_LIMIT.requestQueue.slice(0, 5).map(item => item.email));
+  }
+  console.log('==================');
+}
+
+// Periodic queue status check
+setInterval(checkQueueStatus, 30000); // Check every 30 seconds
 
 // create context menu - initially hidden
 chrome.runtime.onInstalled.addListener(() => {
