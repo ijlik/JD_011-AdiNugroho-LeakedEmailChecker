@@ -51,16 +51,20 @@ function startPollingForUpdates(tabUrl) {
     if (data && data.results) {
       // Check for updates
       let hasUpdates = false;
+      let updatedCount = 0;
       for (const email of allEmails) {
         const oldResult = JSON.stringify(currentResults[email]);
         const newResult = JSON.stringify(data.results[email]);
         if (oldResult !== newResult) {
           console.log(`Update detected for ${email}:`, data.results[email]);
           hasUpdates = true;
+          updatedCount++;
           currentResults[email] = data.results[email];
           updateEmailDisplay(email, data.results[email]);
         }
       }
+      
+      console.log(`Polling found ${updatedCount} updates, hasUpdates: ${hasUpdates}`);
       
       if (hasUpdates) {
         // Update progress status - check for truly pending emails
@@ -74,7 +78,13 @@ function startPollingForUpdates(tabUrl) {
           return true; // Unknown format = assume pending
         });
         
+        const completed = allEmails.filter(e => {
+          const result = currentResults[e];
+          return result && !result.error && result.success !== undefined;
+        });
+        
         console.log(`Pending emails: ${pending.length}/${allEmails.length}`, pending);
+        console.log(`Completed emails: ${completed.length}/${allEmails.length}`, completed.map(e => e));
         
         if (pending.length === 0) {
           status.textContent = `Done. All ${allEmails.length} emails checked. Click Details for more info.`;
@@ -197,12 +207,15 @@ function getEmailStatus(email, result) {
 
 function updateEmailDisplay(email, result) {
   const emailElement = document.querySelector(`[data-email="${email}"]`);
-  if (!emailElement) return;
+  if (!emailElement) {
+    console.error(`Could not find element for email: ${email}`);
+    return;
+  }
   
   const statusInfo = getEmailStatus(email, result);
-  const li = emailElement.closest('li');
+  console.log(`Updating display for ${email}:`, statusInfo);
   
-  li.innerHTML = `
+  emailElement.innerHTML = `
     <strong>${email}</strong><br>
     <span class="status-${statusInfo.status}">
       ${statusInfo.icon} ${statusInfo.text}
@@ -214,7 +227,7 @@ function updateEmailDisplay(email, result) {
   `;
   
   // Re-add click handlers if details button exists
-  const newDetailsBtn = li.querySelector('.detailsBtn');
+  const newDetailsBtn = emailElement.querySelector('.detailsBtn');
   if (newDetailsBtn) {
     addDetailsClickHandler(newDetailsBtn);
   }
@@ -230,6 +243,7 @@ async function displayResults(emails, results) {
     const statusInfo = getEmailStatus(email, result);
     
     const li = document.createElement("li");
+    li.setAttribute("data-email", email); // Add data-email to li element for updateEmailDisplay
     li.innerHTML = `
       <strong>${email}</strong><br>
       <span class="status-${statusInfo.status}">
