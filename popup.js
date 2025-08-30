@@ -392,7 +392,12 @@ scanBtn.addEventListener("click", async () => {
     processingQueue = true;
     
     // bulk check via background with queue system
-    chrome.runtime.sendMessage({ type: "bulk-check-emails", emails: allFoundEmails }, async (res) => {
+    const [currentTab] = await chrome.tabs.query({ active: true, currentWindow: true });
+    chrome.runtime.sendMessage({ 
+      type: "bulk-check-emails", 
+      emails: allFoundEmails,
+      tabUrl: currentTab.url  // Include tab URL in the message
+    }, async (res) => {
       console.log("Bulk check initial response:", res); // Debug log
       if (!res || res.error) {
         status.textContent = res ? res.message : "Error checking emails.";

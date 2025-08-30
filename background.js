@@ -286,6 +286,10 @@ chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
         const results = {};
         const emailStatuses = {};
         
+        // Capture sender tab URL at the start for use in updateProgress
+        const senderTabUrl = msg.tabUrl || (sender && sender.tab ? sender.tab.url : null);
+        console.log('Captured sender tab URL:', senderTabUrl);
+        
         // Initialize all emails as pending
         for (const email of msg.emails) {
           results[email] = { status: 'pending', message: 'Queued for checking...' };
@@ -303,8 +307,8 @@ chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
         const updateProgress = async (email, result) => {
           console.log(`updateProgress called for ${email}:`, result);
           try {
-            // Use the tab info from the original request instead of querying current tab
-            let tabUrl = sender && sender.tab ? sender.tab.url : null;
+            // Use the captured sender tab URL first
+            let tabUrl = senderTabUrl;
             
             if (!tabUrl) {
               // Fallback: try to get current active tab
@@ -319,10 +323,10 @@ chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
             }
             
             const storageKey = `popup_results_${tabUrl}`;
-            console.log(`Storage key: ${storageKey}`);
+            console.log(`Using storage key: ${storageKey}`);
             
             const stored = await chrome.storage.local.get(storageKey);
-            console.log(`Current stored data:`, stored);
+            console.log(`Current stored data for ${storageKey}:`, stored);
             
             if (stored[storageKey]) {
               const data = stored[storageKey];
