@@ -1,5 +1,7 @@
 # Leaked Email Checker Chrome Extension
 
+<img width="1663" height="904" alt="Screenshot 2025-08-30 at 20 14 23" src="https://github.com/user-attachments/assets/9969fcfa-5480-4809-ad00-197268d4f388" />
+
 A Chrome extension that checks if email addresses have been involved in data breaches. This extension scans web pages for email addresses and checks them against a database of known data breaches using the Bitlion proxy service.
 
 ## Features
