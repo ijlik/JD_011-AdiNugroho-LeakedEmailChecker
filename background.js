@@ -1,6 +1,6 @@
 const API_BASE = "https://email-check.bitlion.io/api/search";
 // const CACHE_TTL_MS = 7 * 24 * 60 * 60 * 1000; // 7 days
-const CACHE_TTL_MS = 1 * 1000; // 7 days
+const CACHE_TTL_MS = 1 * 1000; // 1 second
 
 // create context menu
 chrome.runtime.onInstalled.addListener(() => {

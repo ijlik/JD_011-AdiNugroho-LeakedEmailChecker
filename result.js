@@ -60,15 +60,16 @@ async function fetchDetails(email) {
   
   area.appendChild(breachesContainer);
   
-  // actionable advice
+  // Add recommended actions at the bottom
   const advice = document.createElement("div");
   advice.className = "recommendations";
-  advice.innerHTML = `<h3>Recommended actions</h3>
+  advice.innerHTML = `<h3>⚠️ Beware your privacy data. Do this instead:</h3>
     <ol>
       <li>Change your password on affected services and any reuse across sites.</li>
       <li>Enable 2-factor authentication (2FA) where possible.</li>
       <li>Use a password manager to create unique passwords.</li>
       <li>Monitor accounts for suspicious activity.</li>
+      <li>If you want to consultation more contact us <a href="https://bitlionai.com" target="_blank">https://bitlionai.com</a> or privately send email to <a href="mailto:anugroho@bitlion.io">anugroho@bitlion.io</a></li>
     </ol>`;
   area.appendChild(advice);
 })();

@@ -48,7 +48,7 @@ scanBtn.addEventListener("click", async () => {
         const r = results[e];
         console.log(`Email ${e}:`, r); // Debug log for each email
         const li = document.createElement("li");
-        li.innerHTML = `<strong>${e}</strong> — ${r && r.success && r.breaches_found > 0 ? `⚠️ ${r.breaches_found} breach(es)` : "✅ No known leaks" } <button data-email="${e}" class="detailsBtn">Details</button>`;
+        li.innerHTML = `<strong>${e}</strong><br>${r && r.success && r.breaches_found > 0 ? `⚠️ ${r.breaches_found} breach(es)` : "✅ No known leaks" } <button data-email="${e}" class="detailsBtn">Details</button>`;
         resultsList.appendChild(li);
       });
       status.textContent = "Done. Click Details for more info.";

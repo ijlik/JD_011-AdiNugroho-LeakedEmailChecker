@@ -1,8 +1,8 @@
 {
   "manifest_version": 3,
-  "name": "Leaked Email Checker (Bitlion Proxy)",
+  "name": "Leaked Email Checker (by Bitlion)",
   "version": "1.0.0",
-  "description": "Checks whether an email has been leaked using Bitlion's HIBP proxy.",
+  "description": "Checks whether an email has been leaked using Bitlion's API.",
   "permissions": [
     "storage",
     "contextMenus",
