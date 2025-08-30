@@ -1,0 +1,104 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Email Highlighting Test Page</title>
+    <style>
+        body { font-family: Arial, sans-serif; margin: 40px; line-height: 1.6; }
+        .container { max-width: 800px; margin: 0 auto; }
+        .email-section { background: #f9f9f9; padding: 20px; margin: 20px 0; border-radius: 8px; }
+        h1 { color: #2c5aa0; }
+        p { margin-bottom: 15px; }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>Email Highlighting Test Page</h1>
+        <p>This page contains various emails to test the highlighting feature of the Leaked Email Checker extension.</p>
+        
+        <div class="email-section">
+            <h3>Negative Test Cases</h3>
+            <p><strong>Test Case #1 - Non-Email Strings:</strong> Try selecting and right-clicking these:</p>
+            <ul>
+                <li>hello world</li>
+                <li>123456789</li>
+                <li>not-an-email</li>
+                <li>@domain.com</li>
+                <li>user@</li>
+                <li>user@domain</li>
+                <li>user..double@domain.com</li>
+                <li>toolongemailthatexceedslimitstoolongemailthatexceedslimitstoolongemailthatexceedslimitstoolongemailthatexceedslimitstoolongemailthatexceedslimitstoolongemailthatexceedslimitstoolongemailthatexceedslimitstoolongemailthatexceedslimitstoolongemailthatexceedslimitstoolongemailthatexceedslimits@domain.com</li>
+            </ul>
+            <p><strong>Expected:</strong> Should show "is not a valid email address" notification</p>
+        </div>
+
+        <div class="email-section">
+            <h3>Contact Information</h3>
+            <p>For support, please contact: <strong>support@example.com</strong></p>
+            <p>Business inquiries: business@testcompany.org</p>
+            <p>You can also reach our team at info@demo-site.net for general questions.</p>
+            <p>Simple email test: test@gmail.com</p>
+        </div>
+        
+        <div class="email-section">
+            <h3>User Accounts</h3>
+            <p>Recent registrations include:</p>
+            <ul>
+                <li>john.doe@gmail.com - Premium user</li>
+                <li>sarah.wilson@outlook.com - Free tier</li>
+                <li>mike.johnson@yahoo.com - Business account</li>
+            </ul>
+        </div>
+        
+        <div class="email-section">
+            <h3>Newsletter Subscribers</h3>
+            <p>Our newsletter has subscribers like newsletter@testmail.com and updates@news-site.org.</p>
+            <p>Marketing emails go to: marketing.team@company-example.com</p>
+        </div>
+        
+        <div class="email-section">
+            <h3>Form Example</h3>
+            <form>
+                <label for="email">Enter your email:</label><br>
+                <input type="email" id="email" name="email" placeholder="user@example.com" style="padding: 8px; margin: 10px 0; width: 300px;"><br>
+                
+                <label for="contact">Additional contact:</label><br>
+                <textarea id="contact" name="contact" rows="3" cols="40" style="margin: 10px 0;">contact@your-domain.com</textarea><br>
+                
+                <button type="button" style="padding: 10px 20px; background: #2c5aa0; color: white; border: none; border-radius: 4px;">Submit</button>
+            </form>
+        </div>
+        
+        <div class="email-section">
+            <h3>Instructions</h3>
+            <ol>
+                <li>Install the Leaked Email Checker extension</li>
+                <li><strong>Right-click context menu test:</strong>
+                    <ul>
+                        <li>Select any email address on this page (highlight it)</li>
+                        <li>Right-click and choose "Check if leaked"</li>
+                        <li>If the email has breaches, you'll see a clickable tooltip</li>
+                        <li><strong>Click the tooltip to open detailed breach information!</strong></li>
+                    </ul>
+                </li>
+                <li><strong>Extension popup test:</strong>
+                    <ul>
+                        <li>Click the extension icon in the toolbar</li>
+                        <li>Click "Scan page for emails" to find all emails on this page</li>
+                        <li>Click on any email address in the results list to highlight it on this page</li>
+                        <li>Click "Details" button to see full breach information</li>
+                    </ul>
+                </li>
+                <li><strong>Input field test:</strong>
+                    <ul>
+                        <li>Type an email address in the form below</li>
+                        <li>If it's breached, you'll see a clickable tooltip</li>
+                        <li>Click the tooltip to view details</li>
+                    </ul>
+                </li>
+            </ol>
+        </div>
+    </div>
+</body>
+</html>
