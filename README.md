@@ -6,9 +6,7 @@ A Chrome extension that checks if email addresses have been involved in data bre
 
 - 🔍 **Page Scanning**: Automatically detects email addresses on any webpage
 - ⚡ **Quick Check**: Right-click context menu to check selected email addresses
-- 🎯 **Visual Highlighting**: Highlights compromised emails directly on the webpage
-- 💾 **Smart Caching**: Caches results for 7 days to reduce API calls
-- 🔔 **Notifications**: Desktop notifications for scan results
+- 💾 **Smart Caching**: Caches results for 30 days to reduce API calls
 - 🛡️ **Privacy Focused**: Uses Bitlion proxy to protect your privacy
 
 ### ✨ Related Repositories
@@ -55,9 +53,6 @@ The extension provides a clean popup interface and visual highlighting of compro
 1. Select any email address on a webpage
 2. Right-click and choose "Check if leaked"
 3. A notification will show the result
-
-### Method 3: Visual Highlighting
-When emails are found to be compromised, they will be highlighted directly on the webpage with visual indicators.
 
 ## How It Works
 
