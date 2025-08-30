@@ -195,3 +195,18 @@ chrome.runtime.onMessage.addListener((msg) => {
     }
   }
 });
+
+// Monitor text selections to control context menu visibility
+document.addEventListener('selectionchange', () => {
+  const selection = window.getSelection();
+  const selectedText = selection.toString().trim();
+  
+  // Send selection to background to control context menu
+  chrome.runtime.sendMessage({
+    type: 'selection-changed',
+    text: selectedText,
+    hasSelection: selectedText.length > 0
+  }).catch(() => {
+    // Ignore errors if background script is not ready
+  });
+});

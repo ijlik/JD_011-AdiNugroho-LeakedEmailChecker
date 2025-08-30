@@ -2,14 +2,51 @@ const API_BASE = "https://email-check.bitlion.io/api/search";
 // const CACHE_TTL_MS = 7 * 24 * 60 * 60 * 1000; // 7 days
 const CACHE_TTL_MS = 1 * 1000; // 1 second
 
-// create context menu
+// Email validation helper function
+function isValidEmail(email) {
+  if (!email || typeof email !== 'string') return false;
+  
+  // Basic email regex
+  const emailRegex = /^[a-zA-Z0-9.!#$%&'*+/=?^_`{|}~-]+@[a-zA-Z0-9](?:[a-zA-Z0-9-]{0,61}[a-zA-Z0-9])?(?:\.[a-zA-Z0-9](?:[a-zA-Z0-9-]{0,61}[a-zA-Z0-9])?)*$/;
+  
+  if (!emailRegex.test(email)) return false;
+  if (email.length > 320) return false; // RFC 5321 limit
+  
+  const localPart = email.split('@')[0];
+  if (localPart.length > 64) return false; // RFC 5321 limit
+  
+  return true;
+}
+
+// create context menu - initially hidden
 chrome.runtime.onInstalled.addListener(() => {
+  // Don't create context menu on install - it will be created dynamically
+});
+
+// Handle dynamic context menu creation based on selection
+let currentContextMenuId = null;
+
+function createContextMenuForEmail() {
+  if (currentContextMenuId) return; // Already exists
+  
   chrome.contextMenus.create({
     id: "check-email-selection",
     title: "Check if leaked",
-    contexts: ["selection", "link", "editable"]
+    contexts: ["selection"]
+  }, () => {
+    if (!chrome.runtime.lastError) {
+      currentContextMenuId = "check-email-selection";
+    }
   });
-});
+}
+
+function removeContextMenu() {
+  if (!currentContextMenuId) return; // Already removed
+  
+  chrome.contextMenus.remove(currentContextMenuId, () => {
+    currentContextMenuId = null;
+  });
+}
 
 // helper: get cache
 async function getCached(email) {
@@ -65,14 +102,10 @@ chrome.contextMenus.onClicked.addListener(async (info, tab) => {
     email = info.linkUrl.replace(/^mailto:/i, "");
   }
   email = email && email.trim();
-  if (!email) {
-    chrome.notifications.create({
-      type: "basic",
-      iconUrl: "icons/icon48.png",
-      title: "Leaked Email Checker",
-      message: "No email detected to check."
-    });
-    return;
+  
+  // Validate email format - if not valid, silently ignore
+  if (!email || !isValidEmail(email)) {
+    return; // Don't show any notification, just ignore
   }
 
   const result = await callApi(email);
@@ -151,6 +184,16 @@ chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
   if (msg && msg.type === "open-details-tab") {
     // Open a new tab with the details page
     chrome.tabs.create({ url: msg.url });
+    return true;
+  }
+
+  if (msg && msg.type === "selection-changed") {
+    // Handle selection change for dynamic context menu
+    if (msg.hasSelection && isValidEmail(msg.text)) {
+      createContextMenuForEmail();
+    } else {
+      removeContextMenu();
+    }
     return true;
   }
 });
