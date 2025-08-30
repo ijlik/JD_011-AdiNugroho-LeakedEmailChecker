@@ -1,8 +1,20 @@
 const EMAIL_REGEX = /[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-z]{2,}/g;
 let inputDebounce = null;
 
-function isEmail(s) {
-  return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(s);
+function isEmail(email) {
+  // Enhanced email validation to match background.js and popup.js
+  if (!email || typeof email !== 'string') return false;
+  
+  // Basic email regex
+  const emailRegex = /^[a-zA-Z0-9.!#$%&'*+/=?^_`{|}~-]+@[a-zA-Z0-9](?:[a-zA-Z0-9-]{0,61}[a-zA-Z0-9])?(?:\.[a-zA-Z0-9](?:[a-zA-Z0-9-]{0,61}[a-zA-Z0-9])?)*$/;
+  
+  if (!emailRegex.test(email)) return false;
+  if (email.length > 320) return false; // RFC 5321 limit
+  
+  const localPart = email.split('@')[0];
+  if (localPart.length > 64) return false; // RFC 5321 limit
+  
+  return true;
 }
 
 function createTooltip(text) {

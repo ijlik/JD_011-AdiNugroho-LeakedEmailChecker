@@ -48,13 +48,36 @@ scanBtn.addEventListener("click", async () => {
   chrome.scripting.executeScript({
     target: { tabId: tab.id },
     func: () => {
-      // find text nodes with email-like text (simple)
+      // Email validation function (same as background.js)
+      function isValidEmail(email) {
+        if (!email || typeof email !== 'string') return false;
+        
+        // Basic email regex
+        const emailRegex = /^[a-zA-Z0-9.!#$%&'*+/=?^_`{|}~-]+@[a-zA-Z0-9](?:[a-zA-Z0-9-]{0,61}[a-zA-Z0-9])?(?:\.[a-zA-Z0-9](?:[a-zA-Z0-9-]{0,61}[a-zA-Z0-9])?)*$/;
+        
+        if (!emailRegex.test(email)) return false;
+        if (email.length > 320) return false; // RFC 5321 limit
+        
+        const localPart = email.split('@')[0];
+        if (localPart.length > 64) return false; // RFC 5321 limit
+        
+        return true;
+      }
+      
+      // find text nodes with email-like text and validate them
       const EMAIL = /[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-z]{2,}/g;
       const found = new Set();
       function walk(node) {
         if (node.nodeType === Node.TEXT_NODE) {
           const m = node.textContent.match(EMAIL);
-          if (m) m.forEach(e => found.add(e));
+          if (m) {
+            // Validate each found email before adding
+            m.forEach(e => {
+              if (isValidEmail(e)) {
+                found.add(e);
+              }
+            });
+          }
         } else {
           for (let child of node.childNodes) {
             // skip script/style
