@@ -184,7 +184,7 @@ document.addEventListener("DOMContentLoaded", async () => {
 
 function getEmailStatus(email, result) {
   if (!result) return { status: 'pending', icon: '⏳', text: 'Pending...' };
-  if (result.error) return { status: 'error', icon: '❌', text: `Error: ${result.message}` };
+  if (result.error) return { status: 'error', icon: '❌', text: `Error: ${result.error}` };
   if (result.status === 'pending') return { status: 'pending', icon: '⏳', text: 'Queued for checking...' };
   
   // Check if it's actually a pending result (has our pending structure)
