@@ -63,12 +63,18 @@ function startPollingForUpdates(tabUrl) {
       }
       
       if (hasUpdates) {
-        // Update progress status
-        const pending = allEmails.filter(e => 
-          !currentResults[e] || currentResults[e].status === 'pending'
-        );
+        // Update progress status - check for truly pending emails
+        const pending = allEmails.filter(e => {
+          const result = currentResults[e];
+          if (!result) return true; // No result yet = pending
+          if (result.error) return false; // Error = not pending
+          if (result.status === 'pending') return true; // Explicitly pending
+          if (result.message && result.message.includes('Queued for checking')) return true; // Our pending format
+          if (result.success !== undefined) return false; // Has API response = not pending
+          return true; // Unknown format = assume pending
+        });
         
-        console.log(`Pending emails: ${pending.length}/${allEmails.length}`);
+        console.log(`Pending emails: ${pending.length}/${allEmails.length}`, pending);
         
         if (pending.length === 0) {
           status.textContent = `Done. All ${allEmails.length} emails checked. Click Details for more info.`;
@@ -138,9 +144,15 @@ document.addEventListener("DOMContentLoaded", async () => {
     displayResults(savedData.emails, savedData.results);
     
     // Check if there are pending emails (processing in progress)
-    const pending = savedData.emails.filter(e => 
-      !savedData.results[e] || savedData.results[e].status === 'pending'
-    );
+    const pending = savedData.emails.filter(e => {
+      const result = savedData.results[e];
+      if (!result) return true; // No result yet = pending
+      if (result.error) return false; // Error = not pending
+      if (result.status === 'pending') return true; // Explicitly pending
+      if (result.message && result.message.includes('Queued for checking')) return true; // Our pending format
+      if (result.success !== undefined) return false; // Has API response = not pending
+      return true; // Unknown format = assume pending
+    });
     
     if (pending.length > 0) {
       // Processing is ongoing
@@ -165,12 +177,22 @@ function getEmailStatus(email, result) {
   if (result.error) return { status: 'error', icon: '❌', text: `Error: ${result.message}` };
   if (result.status === 'pending') return { status: 'pending', icon: '⏳', text: 'Queued for checking...' };
   
-  // Valid result
-  if (result.success && result.breaches_found > 0) {
-    return { status: 'leaked', icon: '⚠️', text: `${result.breaches_found} breach(es) found` };
-  } else {
-    return { status: 'safe', icon: '✅', text: 'No known leaks' };
+  // Check if it's actually a pending result (has our pending structure)
+  if (result.message && result.message.includes('Queued for checking')) {
+    return { status: 'pending', icon: '⏳', text: result.message };
   }
+  
+  // Valid result - check if it has the expected API response structure
+  if (result.success !== undefined) {
+    if (result.success && result.breaches_found > 0) {
+      return { status: 'leaked', icon: '⚠️', text: `${result.breaches_found} breach(es) found` };
+    } else {
+      return { status: 'safe', icon: '✅', text: 'No known leaks' };
+    }
+  }
+  
+  // Fallback for unknown result structure
+  return { status: 'pending', icon: '⏳', text: 'Processing...' };
 }
 
 function updateEmailDisplay(email, result) {

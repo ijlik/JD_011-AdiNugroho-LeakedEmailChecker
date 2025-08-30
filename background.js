@@ -78,6 +78,20 @@ function processQueue() {
     
     try {
       const result = await callApi(email);
+      
+      // Check if we hit API rate limit
+      if (result.error && result.rateLimitExceeded) {
+        console.warn(`API rate limit exceeded for ${email}, pausing queue for 1 minute`);
+        
+        // Put the email back at the front of the queue
+        RATE_LIMIT.requestQueue.unshift({ email, resolve, reject, sendUpdate });
+        RATE_LIMIT.requestCount--; // Don't count this as a successful request
+        
+        // Pause processing for 1 minute
+        setTimeout(processNext, 60000); // 1 minute
+        return;
+      }
+      
       resolve(result);
       // Notify popup of the update
       if (sendUpdate) {
@@ -175,11 +189,34 @@ async function callApi(email) {
     }
     const data = await res.json();
     console.log(`API response for ${email}:`, data); // Debug log
+    
+    // Check if the response contains a rate limit error
+    if (data.error && data.message && data.message.includes('Rate limit exceeded')) {
+      console.warn(`Rate limit exceeded from API for ${email}`);
+      return { 
+        error: true, 
+        message: data.message, 
+        rateLimitExceeded: true 
+      };
+    }
+    
     await setCache(email, data);
     return { source: "network", data };
   } catch (err) {
     console.error("callApi error", err);
-    return { error: true, message: err.message };
+    
+    // Check if error message contains rate limit info
+    const isRateLimit = err.message && (
+      err.message.includes('Rate limit exceeded') || 
+      err.message.includes('429') ||
+      err.message.includes('Too Many Requests')
+    );
+    
+    return { 
+      error: true, 
+      message: err.message,
+      rateLimitExceeded: isRateLimit
+    };
   }
 }
 
@@ -266,47 +303,54 @@ chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
         const updateProgress = async (email, result) => {
           console.log(`updateProgress called for ${email}:`, result);
           try {
-            // Get current tab to determine storage key
-            const tabs = await chrome.tabs.query({ active: true, currentWindow: true });
-            console.log(`Active tabs found:`, tabs.length);
-            if (tabs[0]) {
-              const tabUrl = tabs[0].url;
-              const storageKey = `popup_results_${tabUrl}`;
-              console.log(`Storage key: ${storageKey}`);
-              
-              const stored = await chrome.storage.local.get(storageKey);
-              console.log(`Current stored data:`, stored);
-              
-              if (stored[storageKey]) {
-                const data = stored[storageKey];
-                data.results[email] = result.error ? 
-                  { error: true, message: result.message } : 
-                  result.data;
-                data.timestamp = Date.now();
-                
-                console.log(`Updating storage for ${email}:`, data.results[email]);
-                
-                const storageObj = {};
-                storageObj[storageKey] = data;
-                await chrome.storage.local.set(storageObj);
-                
-                console.log(`Storage updated successfully for ${email}`);
-                
-                // Broadcast update to any listening popups
-                chrome.runtime.sendMessage({
-                  type: 'queue-progress-update',
-                  email: email,
-                  result: result.error ? { error: true, message: result.message } : result.data,
-                  allEmails: msg.emails,
-                  tabUrl: tabUrl
-                }).catch((error) => {
-                  console.log('No popup listening, that\'s OK:', error.message);
-                });
+            // Use the tab info from the original request instead of querying current tab
+            let tabUrl = sender && sender.tab ? sender.tab.url : null;
+            
+            if (!tabUrl) {
+              // Fallback: try to get current active tab
+              const tabs = await chrome.tabs.query({ active: true, currentWindow: true });
+              console.log(`Fallback - Active tabs found:`, tabs.length);
+              if (tabs[0]) {
+                tabUrl = tabs[0].url;
               } else {
-                console.error(`No stored data found for key: ${storageKey}`);
+                console.error('No tab URL available for storage update');
+                return;
               }
+            }
+            
+            const storageKey = `popup_results_${tabUrl}`;
+            console.log(`Storage key: ${storageKey}`);
+            
+            const stored = await chrome.storage.local.get(storageKey);
+            console.log(`Current stored data:`, stored);
+            
+            if (stored[storageKey]) {
+              const data = stored[storageKey];
+              data.results[email] = result.error ? 
+                { error: true, message: result.message } : 
+                result.data;
+              data.timestamp = Date.now();
+              
+              console.log(`Updating storage for ${email}:`, data.results[email]);
+              
+              const storageObj = {};
+              storageObj[storageKey] = data;
+              await chrome.storage.local.set(storageObj);
+              
+              console.log(`Storage updated successfully for ${email}`);
+              
+              // Broadcast update to any listening popups
+              chrome.runtime.sendMessage({
+                type: 'queue-progress-update',
+                email: email,
+                result: result.error ? { error: true, message: result.message } : result.data,
+                allEmails: msg.emails,
+                tabUrl: tabUrl
+              }).catch((error) => {
+                console.log('No popup listening, that\'s OK:', error.message);
+              });
             } else {
-              console.error('No active tab found');
+              console.error(`No stored data found for key: ${storageKey}`);
             }
           } catch (error) {
             console.error('Error updating progress:', error);
