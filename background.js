@@ -2,30 +2,6 @@ const API_BASE = "https://email-check.bitlion.io/api/search";
 // const CACHE_TTL_MS = 7 * 24 * 60 * 60 * 1000; // 7 days
 const CACHE_TTL_MS = 1 * 1000; // 1 second
 
-// Email validation helper function
-function isValidEmail(email) {
-  // Basic email regex that matches most valid email formats
-  const emailRegex = /^[a-zA-Z0-9.!#$%&'*+/=?^_`{|}~-]+@[a-zA-Z0-9](?:[a-zA-Z0-9-]{0,61}[a-zA-Z0-9])?(?:\.[a-zA-Z0-9](?:[a-zA-Z0-9-]{0,61}[a-zA-Z0-9])?)*$/;
-  
-  // Check basic format
-  if (!emailRegex.test(email)) {
-    return false;
-  }
-  
-  // Check length limits
-  if (email.length > 320) { // RFC 5321 limit
-    return false;
-  }
-  
-  // Check local part length (before @)
-  const localPart = email.split('@')[0];
-  if (localPart.length > 64) { // RFC 5321 limit
-    return false;
-  }
-  
-  return true;
-}
-
 // create context menu
 chrome.runtime.onInstalled.addListener(() => {
   chrome.contextMenus.create({
@@ -89,25 +65,12 @@ chrome.contextMenus.onClicked.addListener(async (info, tab) => {
     email = info.linkUrl.replace(/^mailto:/i, "");
   }
   email = email && email.trim();
-  
-  // Check if selection is empty
   if (!email) {
     chrome.notifications.create({
       type: "basic",
       iconUrl: "icons/icon48.png",
       title: "Leaked Email Checker",
-      message: "No text selected to check."
-    });
-    return;
-  }
-  
-  // Validate email format
-  if (!isValidEmail(email)) {
-    chrome.notifications.create({
-      type: "basic",
-      iconUrl: "icons/icon48.png",
-      title: "Leaked Email Checker",
-      message: `"${email.length > 50 ? email.substring(0, 47) + '...' : email}" is not a valid email address.`
+      message: "No email detected to check."
     });
     return;
   }
